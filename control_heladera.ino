@@ -1,69 +1,129 @@
 #include "controlSiNo_sca.h"
 #include "DHT.h"
 
-// --- Configuración del Sensor DHT ---
-#define DHTPIN 2          
-#define DHTTYPE DHT22     // Asumimos sensor DTH22 en la heladera
+// --- Macros de hardware y tiempo de muestreo ---
+#define PIN_SENSOR 2
+#define TIPO_SENSOR DHT22
+#define PIN_COMPRESOR 8
+#define PIN_BOTON_PARADA 3    // Pin para el botón de emergencia (usaremos la resistencia PULLUP interna)
+#define PIN_LED_PARADA 13     // LED integrado en la placa para indicar la parada
+#define TIEMPO_MUESTREO 2000  // Tiempo de muestreo en milisegundos
 
-// --- Configuración de la Heladera ---
-const int PIN_COMPRESOR = 8; // Pin digital que acciona el relé del compresor
+// --- Inicialización de objetos ---
+DHT dht(PIN_SENSOR, TIPO_SENSOR);
 
-// Instanciamos objetos
-DHT dht(DHTPIN, DHTTYPE);
-controlSiNo heladera(PIN_COMPRESOR); // Configura el pin de salida por defecto
+// Para la acción de control se utiliza el módulo Control si-no
+controlSiNo heladera(PIN_COMPRESOR);
 
-// --- Parámetros de Control de la heladera ---
-// Revisar los parametros en funcion de la heladera
-float tempObjetivo = 4.0;    // Temperatura deseada (ej. 4°C)
-float histeresis = 1.5;      // Brecha para evitar encendidos constantes (+/- 1.5°C)
+// --- Parámetros y Variables Globales ---
+float tempObjetivo = 4.0;
+float histeresis = 1.5;
 
-// --- Variables para el temporizador (millis) para evitar bloqueos---
-unsigned long tiempoAnterior = 0;   // Guarda el último instante en que se leyó el sensor
-const long intervalo = 2000;        // Intervalo de muestreo en milisegundos (2 segundos)
-
-// -- Variable para la temperatura obtenida del sensor DHT ---
 float temperaturaMedida = 0.0;
+boolean estadoMotor = false;
+unsigned long tiempoActual = 0;
+unsigned long tiempoAnterior = 0;
+
+// --- Funciones de Configuración ---
+void configurar_hardware() {
+  // Función de configuración para el botón de parada y pin de medición
+  pinMode(PIN_BOTON_PARADA, INPUT_PULLUP); // Pulsador conectado entre el pin 3 y GND
+  pinMode(PIN_LED_PARADA, OUTPUT);
+  digitalWrite(PIN_LED_PARADA, LOW);
+  
+  dht.begin();
+  
+  // Configuración del controlador
+  heladera.Configurar(tempObjetivo, histeresis, SALIDA_INVERTIDA); 
+}
+
+void imprimir_encabezado() {
+  // Imprime información, parámetros (objetivo e histéresis) y columnas
+  Serial.println("==================================================");
+  Serial.println("TL N° 1: Sistema de Control On/Off para Heladera");
+  Serial.print("Parametros configurados -> Objetivo: ");
+  Serial.print(tempObjetivo);
+  Serial.print(" C | Histeresis: +/- ");
+  Serial.print(histeresis);
+  Serial.println(" C");
+  Serial.println("==================================================");
+  
+  // Identificación de cada columna que se imprimirá
+  Serial.println("Tiempo(ms)\tMedicion(C)\tAccion_de_control");
+}
 
 void setup() {
   Serial.begin(9600);
-  dht.begin();
-  
-  // Configura el valor OBJETIVO, su HISTERESIS y el modo de SALIDA
-  // SALIDA_INVERTIDA = el motor prende si hace calor y apaga si hace frío
-  heladera.Configurar(tempObjetivo, histeresis, SALIDA_INVERTIDA);
+  configurar_hardware();
+  imprimir_encabezado(); 
 }
 
-void loop() {
+// --- Funciones de Lógica de Control ---
+bool boton_parada_presionado() {
+  // Detecta el pulsador evitando la función bloqueante delay()
+  return digitalRead(PIN_BOTON_PARADA) == LOW; 
+}
 
-  unsigned long tiempoActual = millis();
-
-  // -- Si pasaron 2 segundos vuelvo a obtener la temperatura del sensor sin bloquear perturbaciones ---
+void parada() {
+  // Apaga el actuador
+  heladera.Apagar(); 
   
-  if (tiempoActual - tiempoAnterior >= intervalo) {
+  // Apaga toda interrupción
+  noInterrupts(); 
+  
+  // Envía un mensaje a la PC
+  Serial.println("\n*** PARADA DE EMERGENCIA ACTIVADA. SISTEMA DETENIDO. ***");
+  
+  // Queda en estado de ciclo infinito dejando un led encendido
+  while (true) {
+    digitalWrite(PIN_LED_PARADA, HIGH); 
+  }
+}
+
+bool debo_muestrear() {
+  // Utilizamos millis() para no bloquear con delay
+  tiempoActual = millis();
+  if (tiempoActual - tiempoAnterior >= TIEMPO_MUESTREO) {
     tiempoAnterior = tiempoActual;
-    // 1. Leer la temperatura del sensor
-    temperaturaMedida = dht.readTemperature();
+    return true;
+  }
+  return false;
+}
 
-    // Comprobar si la lectura falló (muy común en los DHT)
-    if (isnan(temperaturaMedida)) {
-      Serial.println("¡Error al leer el sensor DHT!");
-      delay(2000);
-      return; // Romper loop para volver a intentar
-    }
+void medir() {
+  // Obtiene la muestra de la variable controlada
+  temperaturaMedida = dht.readTemperature();
+}
 
-    // 2. Ejecutar la lógica de control
-    // Controlar() evalúa la medición, cambia el estado del pin si es necesario y devuelve el estado actual
-    boolean estadoMotor = heladera.Controlar(temperaturaMedida);
+void actuar() {
+  // Utiliza el procedimiento de control del módulo
+  if (!isnan(temperaturaMedida)) {
+    estadoMotor = heladera.Controlar(temperaturaMedida);
+  }
+}
 
-    // 3. Escribimos en el monitor
-    Serial.print("Temperatura: ");
+void mostrar_datos() {
+  // Enviamos el monitor
+  if (!isnan(temperaturaMedida)) {
+    Serial.print(tiempoActual);
+    Serial.print("\t\t");
     Serial.print(temperaturaMedida);
-    Serial.print(" °C | Compresor: ");
+    Serial.print("\t\t");
+    Serial.println(estadoMotor ? "ENCENDIDO" : "APAGADO");
+  } else {
+    Serial.println("Error\t\t---\t\t---");
+  }
+}
 
-    if (estadoMotor) {
-      Serial.println("ENCENDIDO");
-    } else {
-      Serial.println("APAGADO");
-    }
+// --- Main Loop ---
+void loop() {
+  if (boton_parada_presionado()) {
+    parada();
+  }
+  
+  if (debo_muestrear()) {
+    medir();
+    actuar();
+    mostrar_datos();
   }
 }

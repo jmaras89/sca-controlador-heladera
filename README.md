@@ -1,45 +1,41 @@
-# 🧊 Sistema de Control Automático para Heladera (On/Off)
+# 🧊 Sistema de Control Automático (On/Off) - Trabajo de Laboratorio Nº1
 
-Este repositorio contiene el código fuente para implementar un sistema de control de temperatura de lazo cerrado (encendido/apagado) para una heladera o refrigerador, basado en Arduino.
+Este repositorio contiene el código fuente para implementar un sistema de control de temperatura de lazo cerrado (encendido/apagado) para una heladera o sistema térmico, basado en la plataforma Arduino. 
 
-## 📖 Descripción General
-El proyecto utiliza un sensor de temperatura y humedad (familia DHT) para monitorear el interior del refrigerador. Cuando la temperatura supera un umbral superior establecido, el sistema activa un relé que enciende el motor del compresor. Una vez que se alcanza la temperatura objetivo inferior, el compresor se apaga. 
+El proyecto fue desarrollado para cumplir con los lineamientos de la materia **Sistemas de Control Automático** de la Universidad Nacional de Avellaneda (UNDAV)
 
-La lógica de control principal delega la decisión a la librería personalizada `controlSiNo_sca`, aplicando una ventana de **histéresis** para evitar el encendido/apagado constante y proteger la vida útil del actuador.
+## 🎯 Objetivos del Laboratorio
+El sistema fue diseñado cumpliendo con los siguientes propósitos establecidos en la guía oficial
+* Controlar un sistema físico con una acción de control encendido-apagado
+* Buscar la máxima precisión posible con este modo de acción de control ajustando la configuración.
+* Registrar y evaluar la reacción del sistema ante alguna perturbación (como la apertura de la puerta) para analizar si el controlador logra compensarla.
+* Utilizar o reconfigurar la experiencia para medir los parámetros del sistema físico a partir de la respuesta medida.
 
-## ⚙️ Requisitos de Hardware
-* **Placa microcontroladora:** Arduino (Uno, Nano, Mega, etc.)
-* **Sensor de temperatura:** DHT22 (recomendado por su precisión y rango) o DHT11.
-* **Actuador:** Módulo Relé de 1 canal (para manejar la potencia de 220V/110V del compresor).
-* Cables jumper y protoboard.
+## 📖 Descripción de la Lógica de Control
+El control sí-no (on-off) es uno de los modos de acción de control más utilizados en la industria y en los equipos domésticos por su simpleza
 
-## 💻 Requisitos de Software y Librerías
-* [Arduino IDE](https://www.arduino.cc/en/software)
-* Librería **DHT sensor library** por Adafruit (instalable desde el gestor de librerías del IDE).
-* Librería **Adafruit Unified Sensor**.
-* Archivos locales de la clase de control: `controlSiNo_sca.h` y `controlSiNo_sca.cpp` (incluidos en este repositorio).
+Para proteger la vida útil del actuador (el motor del compresor) y evitar que se encienda y apague constantemente ante la mínima variación, el sistema aplica una **ventana de histéresis** o brecha diferencial. El actuador recibe la señal de encendido cuando se supera el límite superior, y permanece encendido hasta que la variable controlada cruza el límite inferior determinado por esta histéresis.
+
+## 💻 Librería de Control
+La lógica de control principal delega la decisión a la librería personalizada **`controlSiNo_sca`**:
+* **Autor:** Guillermo Caporaletti (gfcaporaletti@undav.edu.ar).
+* **Institución:** UNDAV, Ingeniería en Informática, Sistemas de Control Automático.
+* **Versión:** 2 (Año 2025).
+* **Funcionamiento:** La librería es instanciada a través de programación orientada a objetos (POO) y restringe el constructor a la configuración inicial de hardware. Mediante el método `Controlar()`, procesa la entrada medida y cambia automáticamente el estado del pin de salida configurado.
+
+## ⚙️ Requisitos de Hardware y Software
+* **Placa microcontroladora:** Arduino (Uno, Nano, Mega, etc.).
+* **Sensor de temperatura:** DS18B20 (mediante librerías `OneWire` y `DallasTemperature`) o familia DHT.
+* **Actuador:** Módulo Relé de 1 canal.
+* **Seguridad:** Pulsador físico para la parada de emergencia.
+* Archivos locales de la clase de control incluidos: `controlSiNo_sca.h` y `controlSiNo_sca.cpp`
 
 ## 🚀 Instalación y Uso
+1. **Conexiones físicas:** Conecta el sensor de temperatura, el módulo relé al pin de salida del compresor y el pulsador de parada de emergencia a un pin con soporte de interrupción o lectura no bloqueante.
+2. **Ajustar parámetros:** Abre el archivo `.ino` con el Arduino IDE. Modifica la variable global de temperatura objetivo y la histéresis para buscar un equilibrio entre la máxima precisión posible y una frecuencia de conmutación segura para el relé.
+3. **Cargar:** Conecta el Arduino vía USB y sube el código.
+4. **Monitorización:** El sistema enviará por puerto serie los datos tabulados de tiempo, medición de la variable controlada y estado de la acción de control para su posterior graficación y análisis de parámetros.
 
-1. **Conexiones físicas:**
-   * Conecta el pin de señal del sensor DHT al **Pin Digital 2** del Arduino.
-   * Conecta el pin de señal del módulo relé al **Pin Digital 8**.
-2. **Configurar el entorno:**
-   * Clona o descarga este repositorio en tu PC.
-   * Asegúrate de que los archivos `controlSiNo_sca.h` y `controlSiNo_sca.cpp` estén ubicados en la misma carpeta que el archivo principal `.ino`.
-3. **Ajustar parámetros:**
-   * Abre el archivo `.ino` con el IDE de Arduino.
-   * Puedes modificar las variables globales `tempObjetivo` (ej. 4.0 °C) e `histeresis` (ej. 1.5 °C) según los requerimientos de tu refrigerador.
-4. **Cargar:**
-   * Conecta el Arduino por USB, verifica el puerto COM y presiona **Subir**.
-
-## 📐 Principio de Control
-El sistema se fundamenta en la teoría de sistemas de control automático en tiempo discreto. Se configura la librería en modo **`SALIDA_INVERTIDA`**:
-* **Límite Superior:** `Objetivo + Histéresis` (Enciende el compresor)
-* **Límite Inferior:** `Objetivo - Histéresis` (Apaga el compresor)
-
-El retardo de muestreo se implementa de forma no bloqueante utilizando la función `millis()`, consultando al sensor cada 2 segundos sin congelar el flujo de ejecución del procesador.
-
-## ✍️ Referencias
-* Lógica de control basada en el libro *"Sistemas de control automatico"*.
-* Proyecto desarrollado para la materia de Sistemas de Control Automático.
+## ✍️ Bibliografía y Referencias
+* Caporaletti, G. & Castellano, J. M. (2026). *Introducción a sistemas de control automático* (Capítulo 4: Acción de control sí-no)
+* Guía para el Trabajo de Laboratorio Nº1: Control encendido-apagado (UNDAV).
