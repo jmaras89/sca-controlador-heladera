@@ -1,0 +1,11 @@
+
+TL N° 1: Sistema de Control On/Off para Heladera
+Parametros configurados -> Objetivo: 10.00 C | Histeresis: +/- 2.00 C
+==================================================
+Tiempo(ms)	Medicion(C)	Accion_de_control
+2000		16.31		ENCENDIDO
+4000		16.31		ENCENDIDO
+6000		16.37		ENCENDIDO
+8000		16.37		ENCENDIDO
+
+*
