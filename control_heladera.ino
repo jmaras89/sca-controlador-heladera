@@ -1,23 +1,25 @@
 #include "controlSiNo_sca.h"
-#include "DHT.h"
+#include "OneWire.h"
+#include "DallasTemperature.h"
 
 // --- Macros de hardware y tiempo de muestreo ---
-#define PIN_SENSOR 2
+#define PIN_SENSOR 4
 #define TIPO_SENSOR DHT22
-#define PIN_COMPRESOR 8
+#define PIN_PELTIER 8
 #define PIN_BOTON_PARADA 3    // Pin para el botón de emergencia (usaremos la resistencia PULLUP interna)
 #define PIN_LED_PARADA 13     // LED integrado en la placa para indicar la parada
 #define TIEMPO_MUESTREO 2000  // Tiempo de muestreo en milisegundos
 
 // --- Inicialización de objetos ---
-DHT dht(PIN_SENSOR, TIPO_SENSOR);
+OneWire oneWire(PIN_SENSOR);
+DallasTemperature sensors(&oneWire);
 
 // Para la acción de control se utiliza el módulo Control si-no
-controlSiNo heladera(PIN_COMPRESOR);
+controlSiNo heladera(PIN_PELTIER);
 
 // --- Parámetros y Variables Globales ---
-float tempObjetivo = 4.0;
-float histeresis = 1.5;
+float tempObjetivo = 17;
+float histeresis = 2;
 
 float temperaturaMedida = 0.0;
 boolean estadoMotor = false;
@@ -26,12 +28,12 @@ unsigned long tiempoAnterior = 0;
 
 // --- Funciones de Configuración ---
 void configurar_hardware() {
+
   // Función de configuración para el botón de parada y pin de medición
   pinMode(PIN_BOTON_PARADA, INPUT_PULLUP); // Pulsador conectado entre el pin 3 y GND
   pinMode(PIN_LED_PARADA, OUTPUT);
   digitalWrite(PIN_LED_PARADA, LOW);
-  
-  dht.begin();
+  sensors.begin();
   
   // Configuración del controlador
   heladera.Configurar(tempObjetivo, histeresis, SALIDA_INVERTIDA); 
@@ -92,7 +94,8 @@ bool debo_muestrear() {
 
 void medir() {
   // Obtiene la muestra de la variable controlada
-  temperaturaMedida = dht.readTemperature();
+  sensors.requestTemperatures();
+  temperaturaMedida = sensors.getTempCByIndex(0);
 }
 
 void actuar() {
@@ -117,10 +120,13 @@ void mostrar_datos() {
 
 // --- Main Loop ---
 void loop() {
-  if (boton_parada_presionado()) {
-    parada();
-  }
-  
+if(!boton_parada_presionado()) {
+  parada();
+ }
+//  digitalWrite(PIN_PELTIER,HIGH);
+//  delay(3000); 
+//  digitalWrite(PIN_PELTIER,LOW);
+//  delay(3000); 
   if (debo_muestrear()) {
     medir();
     actuar();
